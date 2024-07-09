@@ -7,16 +7,26 @@ import torch
 import numpy as np
 
 import gym
-import roboschool
+import driving
+# import roboschool
+import argparse
 
 from PPO import PPO
+
 
 ################################### Training ###################################
 def train():
     print("============================================================================================")
 
     ####### initialize environment hyperparameters ######
-    env_name = "RoboschoolWalker2d-v1"
+    parser = argparse.ArgumentParser(description='Test the model')
+    parser.add_argument('--seed', type=int, default=1001)
+    parser.add_argument('--goalx', type=int, default=15)
+    parser.add_argument('--goaly', type=int, default=38)
+    parser.add_argument('--env', type=str, default='ContinuousFastRandom-v0')
+    parser.add_argument('--render', action='store_true')
+    parser.add_argument('--use-sleep', action='store_true')
+    args = parser.parse_args()
 
     has_continuous_action_space = True  # continuous action space; else discrete
 
@@ -48,12 +58,19 @@ def train():
     random_seed = 0         # set random seed if required (0 = no random seed)
     #####################################################
 
-    print("training environment name : " + env_name)
+    print("training environment name : " + args.env)
 
-    env = gym.make(env_name)
-
+    env = gym.make(args.env)
+    env.set_goal(args.goalx, args.goaly)
+    print(env.goal)
+    for i in range(100):
+        env.reset()
+        env.render()
+        time.sleep(0.01)
+    env.close()
     # state space dimension
     state_dim = env.observation_space.shape[0]
+    print(state_dim)
 
     # action space dimension
     if has_continuous_action_space:
@@ -68,7 +85,7 @@ def train():
     if not os.path.exists(log_dir):
           os.makedirs(log_dir)
 
-    log_dir = log_dir + '/' + env_name + '/'
+    log_dir = log_dir + '/' + args.env + '/'
     if not os.path.exists(log_dir):
           os.makedirs(log_dir)
 
@@ -78,26 +95,28 @@ def train():
     run_num = len(current_num_files)
 
     #### create new log file for each run
-    log_f_name = log_dir + '/PPO_' + env_name + "_log_" + str(run_num) + ".csv"
+    log_f_name = log_dir + '/PPO_' + args.env + "_log_" + str(run_num) + ".csv"
 
-    print("current logging run number for " + env_name + " : ", run_num)
+    print("current logging run number for " + args.env + " : ", run_num)
     print("logging at : " + log_f_name)
     #####################################################
 
     ################### checkpointing ###################
-    run_num_pretrained = 0      #### change this to prevent overwriting weights in same env_name folder
+    run_num_pretrained = 0      #### change this to prevent overwriting weights in same args.env folder
 
     directory = "PPO_preTrained"
     if not os.path.exists(directory):
           os.makedirs(directory)
 
-    directory = directory + '/' + env_name + '/'
+    directory = directory + '/' + args.env + '/'
     if not os.path.exists(directory):
           os.makedirs(directory)
 
 
-    checkpoint_path = directory + "PPO_{}_{}_{}.pth".format(env_name, random_seed, run_num_pretrained)
+    checkpoint_path = directory + "PPO_{}_{}_{}_{}_{}.pth".format(args.env, random_seed, args.goalx, args.goaly, run_num_pretrained)
+    best_model_path = directory + "PPO_{}_{}_{}_{}_{}best.pth".format(args.env, random_seed, args.goalx, args.goaly, run_num_pretrained)
     print("save checkpoint path : " + checkpoint_path)
+    print("save best model path : " + best_model_path)
     #####################################################
 
 
@@ -163,7 +182,7 @@ def train():
 
     time_step = 0
     i_episode = 0
-
+    max_reward = -np.inf
     # training loop
     while time_step <= max_training_timesteps:
 
@@ -173,8 +192,10 @@ def train():
         for t in range(1, max_ep_len+1):
 
             # select action with policy
+            if args.render:
+                env.render()
             action = ppo_agent.select_action(state)
-            state, reward, done, _ = env.step(action)
+            state, reward, done, _ , _= env.step(action)
 
             # saving reward and is_terminals
             ppo_agent.buffer.rewards.append(reward)
@@ -220,6 +241,10 @@ def train():
             if time_step % save_model_freq == 0:
                 print("--------------------------------------------------------------------------------------------")
                 print("saving model at : " + checkpoint_path)
+                if print_avg_reward > max_reward:
+                    max_reward = print_avg_reward
+                    ppo_agent.save(best_model_path)
+                    print("best model saved with reward as ", max_reward)
                 ppo_agent.save(checkpoint_path)
                 print("model saved")
                 print("Elapsed Time  : ", datetime.now().replace(microsecond=0) - start_time)
@@ -228,6 +253,8 @@ def train():
             # break; if the episode is over
             if done:
                 break
+            if args.use_sleep:
+                time.sleep(0.01)
 
         print_running_reward += current_ep_reward
         print_running_episodes += 1
@@ -243,6 +270,7 @@ def train():
     # print total training time
     print("============================================================================================")
     end_time = datetime.now().replace(microsecond=0)
+    print("model with best average reward ", max_reward)
     print("Started training at (GMT) : ", start_time)
     print("Finished training at (GMT) : ", end_time)
     print("Total training time  : ", end_time - start_time)

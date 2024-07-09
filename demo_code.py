@@ -126,7 +126,7 @@ def test():
         state_dict['state'].append(state)
         for t in range(1, max_ep_len+1):
             action = ppo_agent.select_action(state)
-            # print(action.dtype)
+            print(action.dtype)
             state, reward, done, _, _= env.step(action)
             ep_reward += reward
             state_dict['state'].append(state)
@@ -177,9 +177,7 @@ def test():
             pickle.dump(dataload, file)
         print("suboptimal data saved at : " + suboptimal_data_path + " with " + str(num_suboptimal) + " samples")
     print("============================================================================================")
-
-    print("length of dataload ", len(dataload))
-    print("feilds of dataload ", dataload[0].keys())
+    print(type(dataload))
     for i in range(args.num_episodes):
         accumulator = 0
         accumulator2 = 0
@@ -194,10 +192,10 @@ def test():
             env.render()
         for step in range(len(dataload[i]['reward'])):
             action = dataload[i]['action'][step]
-            # print(action.dtype)
+            print(action.dtype)
             next_state, reward, done, _, info= env.step(action)
-            # print("next state as per the model ", next_state)
-            # print("next state as per the data ", dataload[i]['state'][step+1])
+            print("next state as per the model ", next_state)
+            print("next state as per the data ", dataload[i]['state'][step+1])
             try:
                 assert np.allclose(next_state, dataload[i]['state'][step+1])
             except:
@@ -211,8 +209,6 @@ def test():
         time.sleep(0.1)
         print("episode {} done : reward {}, actual reward {} ".format(i, accumulator, accumulator2))
     env.close()
-
-
 
 
 if __name__ == '__main__':
